@@ -39,36 +39,20 @@ async function updateTicket(id, fields) {
 }
 
 async function generateITAnalysis(regulation) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://sachinsharma7.app.n8n.cloud/webhook/generate-it-ticket", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2500,
-      system: `You are a technical architect at a Swedish mortgage bank. Stack is .NET / C#.
-Analyse regulatory changes and produce technical implementation guidance for developers.
-Return ONLY a JSON object — no markdown, no extra text:
-{
-  "requires_it_change": true or false,
-  "technical_spec": "Plain English description of exactly what needs to change in the system. Be specific about classes, endpoints, validations, or data model changes needed.",
-  "csharp_code": "Realistic C# skeleton code. Include namespace, class, method signatures, inline comments referencing the regulation number and deadline. Should be copy-pasteable as a starting point.",
-  "ai_prompt": "A complete, ready-to-paste prompt for a developer to use in Cursor or GitHub Copilot. Include: the tech stack (.NET/C#), the regulation name and requirement, what to implement, which classes/methods to create or modify, and what unit tests to write using xUnit."
-}`,
-      messages: [{
-        role: "user",
-        content: `Analyse this regulation and generate IT implementation guidance:
-
-Title: ${regulation.title}
-Source: ${regulation.source}
-Category: ${regulation.category}
-Summary: ${regulation.summary_sv}
-Required actions: ${tryParse(regulation.required_actions, []).join(", ")}
-Deadline: ${regulation.deadline || "Not specified"}
-Impact: ${regulation.impact_level}`
-      }]
+      title: regulation.title,
+      source: regulation.source,
+      category: regulation.category,
+      summary_sv: regulation.summary_sv,
+      required_actions: tryParse(regulation.required_actions, []).join(", "),
+      deadline: regulation.deadline || "Not specified",
+      impact_level: regulation.impact_level,
     })
   });
-  if (!response.ok) throw new Error(`Claude API error ${response.status}`);
+  if (!response.ok) throw new Error(`Proxy error ${response.status}`);
   const data = await response.json();
   const text = data.content?.map(b => b.text || "").join("") || "";
   const clean = text.replace(/```json|```/g, "").trim();
