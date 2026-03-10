@@ -524,14 +524,25 @@ export default function App() {
   const [lastRefresh,setLastRefresh]=useState(null);
 
   const load=async()=>{setLoading(true);setError(null);try{setItems(await fetchRegulations());setLastRefresh(new Date());}catch(e){setError(e.message);}setLoading(false);};
-  const loadTickets=async()=>{setTicketsLoading(true);try{setTickets(await fetchTickets());}catch(e){console.error(e);}setTicketsLoading(false);};
+const loadTickets = async () => {
+  setTicketsLoading(true);
+  try {
+    const data = await fetchTickets();
+    setTickets(data);
+  } catch(e) {
+    console.error("Tickets error:", e);
+    alert("Failed to load tickets: " + e.message);
+  } finally {
+    setTicketsLoading(false);
+  }
+};
  
-    useEffect(() => {
-    // Avoid calling setState synchronously in effect body
-    (async () => {
-      await load();
-    })();
-  }, []);
+  useEffect(() => {
+  (async () => {
+    await load();
+    await loadTickets();
+  })();
+}, []);
 
   const cycleStatus=async(id,cur)=>{const next=REV_S[cur]?.next||"unreviewed";setItems(prev=>prev.map(i=>i.id===id?{...i,review_status:next}:i));await updateReg(id,{review_status:next});};
   const updateNote=async(id,note)=>{setItems(prev=>prev.map(i=>i.id===id?{...i,reviewer_note:note}:i));await updateReg(id,{reviewer_note:note});};
