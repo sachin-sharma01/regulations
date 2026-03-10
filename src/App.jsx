@@ -39,7 +39,7 @@ async function updateTicket(id, fields) {
 }
 
 async function generateITAnalysis(regulation) {
-  const response = await fetch("https://sachinsharma7.app.n8n.cloud/webhook/generate-it-ticket", {
+  const response = await fetch("/api/generate-it-ticket", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
