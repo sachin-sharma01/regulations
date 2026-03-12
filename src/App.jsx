@@ -1,412 +1,163 @@
 import { useState, useEffect } from "react";
+import { fetchRegulations, fetchTickets, updateReg, insertTicket, updateTicket, generateITAnalysis } from "./utils/api";
+import { fmtDate, daysUntil } from "./utils/format";
+import { DEPT_C, IMP, REV_S, TKT_S, ISO_S, SYS_C, MSG_C, MILESTONES, INIT_ISO, PAY_REGS } from "./constants";
+import Chip from "./components/Chip";
+import CopyButton from "./components/CopyButton";
+import CodeBlock from "./components/CodeBlock";
+import RegCard from "./components/RegCard";
+import ITTicketCard from "./components/ITTicketCard";
+import IsoCard from "./components/IsoCard";
+import PayRegCard from "./components/PayRegCard";
+import "./styles/main.css";
 
-const SUPABASE_URL = "https://pdvmbeokaloiewssnzxn.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkdm1iZW9rYWxvaWV3c3NuenhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MjA1OTgsImV4cCI6MjA4ODE5NjU5OH0.cxOmRJLxgbkh2wUfqWHgKgl4vHaNna1knbCeapd84Ko";
-const HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
-
-function tryParse(val, fallback) {
-  if (Array.isArray(val)) return val;
-  try { return JSON.parse(val || "[]"); } catch { return fallback; }
-}
-
-async function fetchRegulations() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/regulations?order=processed_at.desc`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Supabase error ${res.status}`);
-  const data = await res.json();
-  return data.map(item => ({ ...item, affected_departments: tryParse(item.affected_departments, []), required_actions: tryParse(item.required_actions, []) }));
-}
-
-async function fetchTickets() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/it_tickets?order=created_at.desc`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Supabase error ${res.status}`);
-  return res.json();
-}
-
-async function updateReg(id, fields) {
-  await fetch(`${SUPABASE_URL}/rest/v1/regulations?id=eq.${id}`, { method: "PATCH", headers: HEADERS, body: JSON.stringify(fields) });
-}
-
-async function insertTicket(ticket) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/it_tickets`, {
-    method: "POST", headers: { ...HEADERS, Prefer: "return=representation" }, body: JSON.stringify(ticket),
-  });
-  if (!res.ok) throw new Error(`Insert ticket failed ${res.status}`);
-  return res.json();
-}
-
-async function updateTicket(id, fields) {
-  await fetch(`${SUPABASE_URL}/rest/v1/it_tickets?id=eq.${id}`, { method: "PATCH", headers: HEADERS, body: JSON.stringify(fields) });
-}
-
-async function generateITAnalysis(regulation) {
-  const response = await fetch("/api/generate-it-ticket", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: regulation.title,
-      source: regulation.source,
-      category: regulation.category,
-      summary_sv: regulation.summary_sv,
-      required_actions: tryParse(regulation.required_actions, []).join(", "),
-      deadline: regulation.deadline || "Not specified",
-      impact_level: regulation.impact_level,
-    })
-  });
-  if (!response.ok) throw new Error(`Proxy error ${response.status}`);
-  const data = await response.json();
-  const text = data.content?.map(b => b.text || "").join("") || "";
-  const clean = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(clean);
-}
-
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const DEPT_C = { HR:{bg:"#fff7ed",text:"#c2410c",border:"#fed7aa"}, Compliance:{bg:"#eff6ff",text:"#1d4ed8",border:"#bfdbfe"}, Legal:{bg:"#fdf4ff",text:"#7e22ce",border:"#e9d5ff"}, Risk:{bg:"#fff1f2",text:"#be123c",border:"#fecdd3"}, Finance:{bg:"#f0fdf4",text:"#15803d",border:"#bbf7d0"}, IT:{bg:"#fefce8",text:"#a16207",border:"#fef08a"}, Credit:{bg:"#f0f9ff",text:"#0369a1",border:"#bae6fd"} };
-const IMP = { high:{label:"High",bg:"#fef2f2",text:"#991b1b",border:"#fca5a5",dot:"#ef4444",glow:"rgba(239,68,68,0.10)"}, medium:{label:"Medium",bg:"#fffbeb",text:"#92400e",border:"#fcd34d",dot:"#f59e0b",glow:"rgba(245,158,11,0.10)"}, low:{label:"Low",bg:"#f0fdf4",text:"#166534",border:"#86efac",dot:"#22c55e",glow:"rgba(34,197,94,0.08)"}, not_applicable:{label:"N/A",bg:"#f8fafc",text:"#64748b",border:"#e2e8f0",dot:"#94a3b8",glow:"transparent"} };
-const REV_S = { unreviewed:{label:"Unreviewed",bg:"#f1f5f9",text:"#64748b",next:"in_progress"}, in_progress:{label:"In Progress",bg:"#eff6ff",text:"#1d4ed8",next:"done"}, done:{label:"✓ Done",bg:"#f0fdf4",text:"#15803d",next:"unreviewed"}, approved:{label:"✓ Approved",bg:"#f0fdf4",text:"#15803d"}, approved_it:{label:"⚙️ IT Ticket Created",bg:"#fdf4ff",text:"#7e22ce"} };
-const TKT_S = { open:{label:"Open",bg:"#f1f5f9",text:"#475569",dot:"#94a3b8"}, in_progress:{label:"In Progress",bg:"#eff6ff",text:"#1d4ed8",dot:"#3b82f6"}, done:{label:"✓ Done",bg:"#f0fdf4",text:"#15803d",dot:"#22c55e"} };
-const ISO_S = { open:{label:"Open",bg:"#f1f5f9",text:"#475569",dot:"#94a3b8"}, in_progress:{label:"In Progress",bg:"#eff6ff",text:"#1d4ed8",dot:"#3b82f6"}, blocked:{label:"Blocked",bg:"#fef2f2",text:"#991b1b",dot:"#ef4444"}, done:{label:"✓ Done",bg:"#f0fdf4",text:"#15803d",dot:"#22c55e"} };
-const SYS_C = { "Payment engine":{bg:"#eff6ff",text:"#1d4ed8",border:"#bfdbfe"}, "API / integrations":{bg:"#fdf4ff",text:"#7e22ce",border:"#e9d5ff"}, "Customer portal":{bg:"#fff7ed",text:"#c2410c",border:"#fed7aa"} };
-const MSG_C = { "pain.001":{bg:"#eff6ff",text:"#1d4ed8",border:"#bfdbfe"}, "pain.002":{bg:"#fdf4ff",text:"#7e22ce",border:"#e9d5ff"} };
-const MILESTONES = [{id:"m1",label:"pain.001 format sign-off",date:"2026-06-30",source:"Internal"},{id:"m2",label:"pain.002 format sign-off",date:"2026-07-31",source:"Internal"},{id:"m3",label:"End-to-end UAT complete",date:"2026-09-15",source:"Internal"},{id:"m4",label:"Parallel run start",date:"2026-10-01",source:"Bankgirot"},{id:"m5",label:"Bankgirot SEK Batch go-live",date:"2026-11-01",source:"Bankgirot"}];
-const INIT_ISO = [{id:"iso-001",title:"Map pain.001 fields to payment engine",system:"Payment engine",message_type:"pain.001",priority:"high",status:"in_progress",owner:"",notes:"",source:"Bankgirot Implementation Guide 2025"},{id:"iso-002",title:"Handle pain.002 status codes in API layer",system:"API / integrations",message_type:"pain.002",priority:"high",status:"open",owner:"",notes:"",source:"Bankgirot Implementation Guide 2025"},{id:"iso-003",title:"Update customer portal to show ISO payment status",system:"Customer portal",message_type:"pain.002",priority:"medium",status:"open",owner:"",notes:"",source:"Internal"},{id:"iso-004",title:"Validate BIC/IBAN format in pain.001 outbound",system:"Payment engine",message_type:"pain.001",priority:"high",status:"open",owner:"",notes:"",source:"ISO 20022 SEK Rulebook"},{id:"iso-005",title:"API integration test with Bankgirot test environment",system:"API / integrations",message_type:"pain.001",priority:"medium",status:"open",owner:"",notes:"",source:"Bankgirot"},{id:"iso-006",title:"Customer portal error message localisation (SV/EN)",system:"Customer portal",message_type:"pain.002",priority:"low",status:"open",owner:"",notes:"",source:"Internal"}];
-const PAY_REGS = [{id:"pr1",title:"Bankgirot: Technical Specifications for ISO 20022 SEK Batch v3.1",source:"Bankgirot",date:"2025-10-01",impact:"high",message_types:["pain.001"],systems:["Payment engine","API / integrations"],summary:"Updated spec for SEK credit transfers using pain.001.001.09. Introduces mandatory fields for creditor agent BIC and purpose code for mortgage disbursements.",actions:["Update pain.001 schema validation to v09","Add mandatory BIC field to payment engine","Test with Bankgirot certification environment"]},{id:"pr2",title:"Riksbanken: RIX-INST migration to ISO 20022 phase 2",source:"Riksbanken",date:"2025-11-15",impact:"high",message_types:["pain.002"],systems:["Payment engine","API / integrations","Customer portal"],summary:"Phase 2 requires all participant banks to support pain.002 status reports by Q3 2026.",actions:["Review phase 2 timeline vs internal roadmap","Assign pain.002 owner in payment team","Align with Riksbanken participation desk"]},{id:"pr3",title:"Finance Sweden: Industry guidance on ISO 20022 structured remittance",source:"Finance Sweden",date:"2026-01-20",impact:"medium",message_types:["pain.001"],systems:["Payment engine","Customer portal"],summary:"Recommendation to use structured remittance info in pain.001 for mortgage payments.",actions:["Evaluate structured remittance for mortgage disbursements","Update customer portal payment reference field"]}];
-
-function fmtDate(iso) { if (!iso) return "—"; return new Date(iso).toLocaleDateString("sv-SE",{day:"numeric",month:"short",year:"numeric"}); }
-function daysUntil(d) { return Math.ceil((new Date(d)-new Date())/86400000); }
-function Chip({label,c}) { const col=c||{bg:"#f1f5f9",text:"#475569",border:"#e2e8f0"}; return <span style={{background:col.bg,color:col.text,border:`1px solid ${col.border}`,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{label}</span>; }
-
-// ─── COPY BUTTON ──────────────────────────────────────────────────────────────
-function CopyButton({ text, label = "Copy" }) {
-  const [copied, setCopied] = useState(false);
-  const copy = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text || "");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button onClick={copy} style={{background: copied ? "#f0fdf4" : "#f1f5f9", color: copied ? "#15803d" : "#475569", border: `1px solid ${copied ? "#86efac" : "#e2e8f0"}`, borderRadius:6, padding:"3px 10px", fontSize:11, cursor:"pointer", fontWeight:600, transition:"all 0.15s"}}>
-      {copied ? "✓ Copied" : label}
-    </button>
-  );
-}
-
-// ─── CODE BLOCK ───────────────────────────────────────────────────────────────
-function CodeBlock({ title, content, lang = "code", accent = "#1d4ed8" }) {
-  return (
-    <div style={{marginBottom:16}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:3,height:14,background:accent,borderRadius:2}} />
-          <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#64748b"}}>{title}</span>
-          <span style={{background:"#f1f5f9",color:"#64748b",padding:"1px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{lang}</span>
-        </div>
-        <CopyButton text={content} />
-      </div>
-      <pre style={{margin:0,background:"#0f172a",color:"#e2e8f0",borderRadius:8,padding:"14px 16px",fontSize:12,lineHeight:1.7,overflowX:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Consolas','Monaco',monospace"}}>
-        {content}
-      </pre>
-    </div>
-  );
-}
-
-// ─── REGULATION CARD ──────────────────────────────────────────────────────────
-function RegCard({ item, onNote, onApprove, onApproveIT }) {
-  const [open, setOpen] = useState(false);
-  const [editNote, setEditNote] = useState(false);
-  const [noteText, setNoteText] = useState(item.reviewer_note || "");
-  const [saving, setSaving] = useState(false);
-  const [generatingIT, setGeneratingIT] = useState(false);
-  const imp = IMP[item.impact_level] || IMP.low;
+// ─── DEADLINE CALENDAR ───────────────────────────────────────────────────────
+function getRisk(item) {
   const isApproved = ["approved","approved_it"].includes(item.review_status);
-  const hasITTicket = item.review_status === "approved_it";
-
-  return (
-    <div style={{background:"#fff",border:`1px solid ${imp.border}`,borderLeft:`4px solid ${imp.dot}`,borderRadius:12,marginBottom:12,overflow:"hidden",boxShadow:`0 2px 8px ${imp.glow}`,transition:"transform 0.15s"}}
-      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
-      <div style={{padding:"16px 20px",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-          <div style={{width:10,height:10,borderRadius:"50%",background:imp.dot,marginTop:5,flexShrink:0,boxShadow:`0 0 6px ${imp.dot}`}} />
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
-              <span style={{background:imp.bg,color:imp.text,border:`1px solid ${imp.border}`,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase"}}>{imp.label} Impact</span>
-              <span style={{background:"#0f172a",color:"#fff",padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:700}}>{item.source}</span>
-              <span style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>{item.category}</span>
-              <span style={{marginLeft:"auto",fontSize:11,color:"#94a3b8"}}>{fmtDate(item.processed_at)}</span>
-            </div>
-            <h3 style={{margin:"0 0 8px",fontSize:14.5,fontWeight:700,color:"#0f172a",lineHeight:1.4}}>{item.title}</h3>
-            <p style={{margin:"0 0 10px",fontSize:13,color:"#475569",lineHeight:1.6}}>{item.summary_sv}</p>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              {item.affected_departments?.map(d=><Chip key={d} label={d} c={DEPT_C[d]} />)}
-              {item.deadline&&<span style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fca5a5",padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700}}>⏱ {item.deadline}</span>}
-              {hasITTicket&&<span style={{background:"#fdf4ff",color:"#7e22ce",border:"1px solid #e9d5ff",padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700}}>⚙️ IT Ticket Created</span>}
-              {item.review_status==="approved"&&<span style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #86efac",padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700}}>✅ Approved</span>}
-            </div>
-          </div>
-          <div style={{color:"#cbd5e1",fontSize:14,marginTop:2}}>{open?"▲":"▼"}</div>
-        </div>
-      </div>
-
-      {open&&(
-        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafbfc",padding:"16px 20px 20px 42px"}}>
-          <div style={{marginBottom:16}}>
-            <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:6}}>Why Relevant</div>
-            <p style={{margin:0,fontSize:13,color:"#334155",lineHeight:1.7,fontStyle:"italic"}}>{item.relevance_reason}</p>
-          </div>
-          {item.required_actions?.length>0&&(
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Required Actions</div>
-              {item.required_actions.map((a,i)=>(
-                <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:6}}>
-                  <div style={{width:20,height:20,borderRadius:"50%",background:imp.bg,color:imp.text,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
-                  <span style={{fontSize:13,color:"#1e293b",lineHeight:1.6}}>{a}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Reviewer Note</div>
-            {editNote?(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} rows={3} placeholder="Add your notes…" style={{width:"100%",padding:"8px 12px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}} />
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={async()=>{setSaving(true);await onNote(item.id,noteText);setSaving(false);setEditNote(false);}} disabled={saving} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{saving?"Saving…":"Save"}</button>
-                  <button onClick={()=>setEditNote(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"6px 16px",fontSize:12,cursor:"pointer"}}>Cancel</button>
-                </div>
-              </div>
-            ):(
-              <div onClick={()=>setEditNote(true)} style={{minHeight:36,padding:"8px 12px",border:"1px dashed #cbd5e1",borderRadius:8,fontSize:13,color:item.reviewer_note?"#1e293b":"#94a3b8",cursor:"pointer",background:"#fff"}}>{item.reviewer_note||"Click to add a note…"}</div>
-            )}
-          </div>
-
-          {!isApproved&&(
-            <div style={{borderTop:"1px solid #e2e8f0",paddingTop:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-              <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>Compliance Decision:</span>
-              <button onClick={()=>onApprove(item.id)} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #86efac",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                ✅ Approve — No IT Change
-              </button>
-              <button onClick={async()=>{setGeneratingIT(true);await onApproveIT(item);setGeneratingIT(false);}} disabled={generatingIT}
-                style={{background:generatingIT?"#f8f8f8":"#fdf4ff",color:generatingIT?"#94a3b8":"#7e22ce",border:`1px solid ${generatingIT?"#e2e8f0":"#e9d5ff"}`,borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,cursor:generatingIT?"default":"pointer",display:"flex",alignItems:"center",gap:8}}>
-                {generatingIT?(
-                  <><span style={{display:"inline-block",animation:"spin 1s linear infinite",fontSize:14}}>⏳</span> Generating…</>
-                ):"⚙️ Approve + Needs IT Change"}
-              </button>
-              {generatingIT&&<span style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Claude is analysing the regulation and writing C# code…</span>}
-            </div>
-          )}
-
-          {isApproved&&(
-            <div style={{borderTop:"1px solid #e2e8f0",paddingTop:16}}>
-              <span style={{background: hasITTicket?"#fdf4ff":"#f0fdf4", color: hasITTicket?"#7e22ce":"#15803d", border:`1px solid ${hasITTicket?"#e9d5ff":"#86efac"}`, padding:"6px 14px", borderRadius:8, fontSize:12, fontWeight:700}}>
-                {hasITTicket?"⚙️ Approved — IT ticket created, see IT Tickets tab":"✅ Approved — No IT change required"}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  if (isApproved) return { level:"done",   label:"✓ Done",    bg:"#f0fdf4", text:"#15803d", border:"#86efac", bar:"#22c55e", dot:"#22c55e" };
+  if (!item.deadline) return { level:"none",  label:"No date",  bg:"#f8fafc", text:"#94a3b8", border:"#e2e8f0", bar:"#cbd5e1", dot:"#cbd5e1" };
+  const days = Math.ceil((new Date(item.deadline) - new Date()) / 86400000);
+  if (isNaN(days))    return { level:"none",  label:"No date",  bg:"#f8fafc", text:"#94a3b8", border:"#e2e8f0", bar:"#cbd5e1", dot:"#cbd5e1" };
+  if (days < 0)       return { level:"overdue",label:"Overdue", bg:"#fef2f2", text:"#991b1b", border:"#fca5a5", bar:"#ef4444", dot:"#ef4444", days };
+  if (days <= 30)     return { level:"critical",label:"Critical",bg:"#fef2f2", text:"#991b1b", border:"#fca5a5", bar:"#ef4444", dot:"#ef4444", days };
+  if (days <= 60)     return { level:"atrisk",  label:"At Risk", bg:"#fffbeb", text:"#92400e", border:"#fcd34d", bar:"#f59e0b", dot:"#f59e0b", days };
+  if (days <= 90)     return { level:"watch",   label:"Watch",   bg:"#fff7ed", text:"#c2410c", border:"#fed7aa", bar:"#fb923c", dot:"#fb923c", days };
+  return                     { level:"ontrack", label:"On Track",bg:"#f0fdf4", text:"#15803d", border:"#86efac", bar:"#22c55e", dot:"#22c55e", days };
 }
 
-// ─── IT TICKET CARD ───────────────────────────────────────────────────────────
-function ITTicketCard({ ticket, regulation, onStatusChange }) {
-  const [open, setOpen] = useState(false);
-  const s = TKT_S[ticket.status] || TKT_S.open;
-  const imp = regulation ? (IMP[regulation.impact_level] || IMP.low) : IMP.low;
-
-  const cycleStatus = (e) => {
-    e.stopPropagation();
-    const order = ["open","in_progress","done"];
-    const next = order[(order.indexOf(ticket.status)+1) % order.length];
-    onStatusChange(ticket.id, next);
+function DeadlineCalendar({ items }) {
+  const [filter, setFilter] = useState("all");
+  const withDeadline = items
+    .map(i => ({ ...i, _risk: getRisk(i) }))
+    .filter(i => i._risk.level !== "none")
+    .sort((a, b) => {
+      const order = { overdue:0, critical:1, atrisk:2, watch:3, ontrack:4, done:5 };
+      return (order[a._risk.level]??6) - (order[b._risk.level]??6);
+    });
+  const noDate = items.filter(i => getRisk(i).level === "none");
+  const filtered = filter === "all" ? withDeadline : withDeadline.filter(i => i._risk.level === filter);
+  const counts = {
+    overdue:  withDeadline.filter(i=>i._risk.level==="overdue").length,
+    critical: withDeadline.filter(i=>i._risk.level==="critical").length,
+    atrisk:   withDeadline.filter(i=>i._risk.level==="atrisk").length,
+    watch:    withDeadline.filter(i=>i._risk.level==="watch").length,
+    ontrack:  withDeadline.filter(i=>i._risk.level==="ontrack").length,
+    done:     withDeadline.filter(i=>i._risk.level==="done").length,
   };
-
+  const today = new Date();
+  const months = Array.from({length:6}, (_,i) => {
+    const d = new Date(today.getFullYear(), today.getMonth()+i, 1);
+    return { label: d.toLocaleDateString("sv-SE",{month:"short",year:"numeric"}), year: d.getFullYear(), month: d.getMonth() };
+  });
+  const totalDays = 180;
+  function barProps(deadline) {
+    if (!deadline) return null;
+    const d = new Date(deadline);
+    const diffDays = Math.ceil((d - today) / 86400000);
+    const pct = Math.min(Math.max(diffDays / totalDays, 0), 1);
+    return { pct, diffDays };
+  }
   return (
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:`4px solid ${s.dot}`,borderRadius:12,marginBottom:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)",transition:"transform 0.15s"}}
-      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
-
-      {/* Header */}
-      <div style={{padding:"16px 20px",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-          <div style={{width:10,height:10,borderRadius:"50%",background:s.dot,marginTop:5,flexShrink:0}} />
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
-              <span style={{background:"#0f172a",color:"#fff",padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:700}}>⚙️ IT Ticket</span>
-              {regulation&&<span style={{background:imp.bg,color:imp.text,border:`1px solid ${imp.border}`,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:700,textTransform:"uppercase"}}>{imp.label} Impact</span>}
-              {regulation&&<span style={{background:"#f1f5f9",color:"#475569",padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{regulation.source}</span>}
-              {regulation?.deadline&&<span style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fca5a5",padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700}}>⏱ {regulation.deadline}</span>}
-              <span style={{marginLeft:"auto",fontSize:11,color:"#94a3b8"}}>{fmtDate(ticket.created_at)}</span>
-            </div>
-            <h3 style={{margin:"0 0 8px",fontSize:14.5,fontWeight:700,color:"#0f172a",lineHeight:1.4}}>
-              {regulation?.title || `IT Ticket — ${ticket.regulation_id}`}
-            </h3>
-            <div style={{display:"flex",alignItems:"center",gap:8}} onClick={e=>e.stopPropagation()}>
-              <button onClick={cycleStatus} style={{background:s.bg,color:s.text,border:`1px solid ${s.text}25`,padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"uppercase"}}>
-                {s.label}
-              </button>
-              <span style={{fontSize:11,color:"#94a3b8"}}>Click to advance status</span>
-            </div>
-          </div>
-          <div style={{color:"#cbd5e1",fontSize:14,marginTop:2}}>{open?"▲":"▼"}</div>
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        {[
+          {key:"all",    label:"All",      value:withDeadline.length, color:"#475569"},
+          {key:"overdue",label:"Overdue",  value:counts.overdue,  color:"#ef4444"},
+          {key:"critical",label:"Critical",value:counts.critical, color:"#ef4444"},
+          {key:"atrisk", label:"At Risk",  value:counts.atrisk,   color:"#f59e0b"},
+          {key:"watch",  label:"Watch",    value:counts.watch,    color:"#fb923c"},
+          {key:"ontrack",label:"On Track", value:counts.ontrack,  color:"#22c55e"},
+          {key:"done",   label:"Done",     value:counts.done,     color:"#22c55e"},
+        ].map(s=>(
+          <button key={s.key} onClick={()=>setFilter(s.key)}
+            style={{background: filter===s.key ? s.color : "#fff", color: filter===s.key ? "#fff" : s.color,
+              border:`1.5px solid ${s.color}`, borderRadius:8, padding:"8px 14px", cursor:"pointer",
+              display:"flex", flexDirection:"column", alignItems:"center", minWidth:64, transition:"all 0.15s",
+              boxShadow: filter===s.key ? `0 2px 8px ${s.color}40` : "none"}}>
+            <span style={{fontSize:18,fontWeight:900,lineHeight:1}}>{s.value}</span>
+            <span style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",marginTop:2}}>{s.label}</span>
+          </button>
+        ))}
+        <div style={{marginLeft:"auto",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:11,color:"#92400e",fontWeight:600}}>{noDate.length} regulations have no deadline set</span>
         </div>
       </div>
-
-      {/* Expanded content */}
-      {open&&(
-        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafbfc",padding:"20px 24px 24px 24px"}}>
-
-          {/* Technical Spec */}
-          <div style={{marginBottom:20}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:3,height:14,background:"#0369a1",borderRadius:2}} />
-                <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#64748b"}}>Technical Specification</span>
-              </div>
-              <CopyButton text={ticket.technical_spec} />
-            </div>
-            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"14px 16px",fontSize:13,color:"#1e293b",lineHeight:1.8,whiteSpace:"pre-wrap"}}>
-              {ticket.technical_spec || "No specification available."}
-            </div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginBottom:16}}>
+        <div style={{background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",width:200,flexShrink:0}}>Regulation</span>
+          <div style={{flex:1,display:"flex"}}>
+            {months.map((m,i)=>(
+              <div key={i} style={{flex:1,fontSize:9,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"center"}}>{m.label}</div>
+            ))}
           </div>
-
-          {/* C# Skeleton Code */}
-          {ticket.csharp_code&&(
-            <CodeBlock
-              title="C# Skeleton Code"
-              content={ticket.csharp_code}
-              lang="C#"
-              accent="#7e22ce"
-            />
-          )}
-
-          {/* AI Prompt */}
-          {ticket.ai_prompt&&(
-            <div style={{marginBottom:16}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:3,height:14,background:"#c2410c",borderRadius:2}} />
-                  <span style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#64748b"}}>AI Coding Prompt</span>
-                  <span style={{background:"#fff7ed",color:"#c2410c",padding:"1px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>Paste into Cursor / Copilot</span>
+          <span style={{fontSize:10,color:"#64748b",width:80,textAlign:"right",flexShrink:0}}>Days left</span>
+        </div>
+        {filtered.length === 0 && (
+          <div style={{textAlign:"center",padding:"40px 0",color:"#94a3b8",fontSize:14}}>No regulations match this filter.</div>
+        )}
+        {filtered.map((item,idx) => {
+          const risk = item._risk;
+          const bp = barProps(item.deadline);
+          const imp = IMP[item.impact_level] || IMP.low;
+          return (
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",
+              background: idx%2===0 ? "#fff" : "#fafbfc",
+              borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{width:200,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:imp.dot,flexShrink:0}} />
+                  <span style={{fontSize:10,background:imp.bg,color:imp.text,border:`1px solid ${imp.border}`,padding:"1px 6px",borderRadius:3,fontWeight:800,textTransform:"uppercase"}}>{imp.label}</span>
                 </div>
-                <CopyButton text={ticket.ai_prompt} label="Copy Prompt" />
+                <div style={{fontSize:11,fontWeight:600,color:"#0f172a",lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{item.title}</div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{item.source}</div>
               </div>
-              <div style={{background:"#fff",border:"1px dashed #fed7aa",borderRadius:8,padding:"14px 16px",fontSize:13,color:"#1e293b",lineHeight:1.8,whiteSpace:"pre-wrap",fontStyle:"italic"}}>
-                {ticket.ai_prompt}
+              <div style={{flex:1,position:"relative",height:28,display:"flex",alignItems:"center"}}>
+                {months.map((_,i)=>(
+                  <div key={i} style={{position:"absolute",left:`${(i/months.length)*100}%`,top:0,bottom:0,width:1,background:"#f1f5f9"}} />
+                ))}
+                <div style={{position:"absolute",left:"0%",top:0,bottom:0,width:2,background:"#3b82f6",zIndex:2}} />
+                {bp && (
+                  <div style={{position:"absolute",left:0,width:`${bp.pct*100}%`,height:10,background:risk.bar,borderRadius:5,zIndex:1,minWidth:4,
+                    boxShadow: risk.level==="critical"||risk.level==="overdue" ? `0 0 6px ${risk.bar}80` : "none"}} />
+                )}
+                {bp && bp.pct > 0 && bp.pct <= 1 && (
+                  <div style={{position:"absolute",left:`calc(${bp.pct*100}% - 6px)`,zIndex:3}}>
+                    <div style={{width:12,height:12,borderRadius:"50%",background:risk.dot,border:"2px solid #fff",boxShadow:"0 1px 4px rgba(0,0,0,0.2)"}} />
+                  </div>
+                )}
+                {bp && bp.diffDays < 0 && (
+                  <div style={{position:"absolute",left:2,zIndex:3,background:"#ef4444",color:"#fff",fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3}}>OVERDUE</div>
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Linked Regulation */}
-          {regulation&&(
-            <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"12px 14px",marginTop:4}}>
-              <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:6}}>Linked Regulation</div>
-              <div style={{fontSize:13,fontWeight:600,color:"#0f172a",marginBottom:4}}>{regulation.title}</div>
-              <div style={{fontSize:12,color:"#64748b",lineHeight:1.6}}>{regulation.summary_sv}</div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── ISO CARD ─────────────────────────────────────────────────────────────────
-function IsoCard({item,onUpdate}) {
-  const [open,setOpen]=useState(false);
-  const [editOwner,setEditOwner]=useState(false);
-  const [ownerText,setOwnerText]=useState(item.owner||"");
-  const [editNotes,setEditNotes]=useState(false);
-  const [notesText,setNotesText]=useState(item.notes||"");
-  const s=ISO_S[item.status]||ISO_S.open;
-  const imp=IMP[item.priority]||IMP.low;
-  const cycleStatus=()=>{const o=["open","in_progress","blocked","done"];onUpdate(item.id,{status:o[(o.indexOf(item.status)+1)%o.length]});};
-  return (
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:`4px solid ${s.dot}`,borderRadius:10,marginBottom:10,overflow:"hidden",transition:"transform 0.15s"}}
-      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
-      <div style={{padding:"14px 18px",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:s.dot,marginTop:6,flexShrink:0}} />
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:6}}>
-              <Chip label={item.message_type} c={MSG_C[item.message_type]} />
-              <Chip label={item.system} c={SYS_C[item.system]} />
-              <span style={{background:imp.bg,color:imp.text,border:`1px solid ${imp.border}`,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:800,textTransform:"uppercase"}}>{item.priority}</span>
-              <div style={{marginLeft:"auto"}} onClick={e=>e.stopPropagation()}>
-                <button onClick={cycleStatus} style={{background:s.bg,color:s.text,border:`1px solid ${s.text}25`,padding:"3px 11px",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",textTransform:"uppercase"}}>{s.label}</button>
-              </div>
-            </div>
-            <div style={{fontSize:14,fontWeight:700,color:"#0f172a",lineHeight:1.4,marginBottom:3}}>{item.title}</div>
-            <div style={{fontSize:11,color:"#94a3b8"}}>Source: {item.source}{item.owner?` · Owner: ${item.owner}`:""}</div>
-          </div>
-          <div style={{color:"#cbd5e1",fontSize:13}}>{open?"▲":"▼"}</div>
-        </div>
-      </div>
-      {open&&(
-        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafbfc",padding:"14px 18px 16px 36px",display:"flex",flexDirection:"column",gap:14}}>
-          <div>
-            <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:6}}>Owner</div>
-            {editOwner?(
-              <div style={{display:"flex",gap:8}}>
-                <input value={ownerText} onChange={e=>setOwnerText(e.target.value)} placeholder="Name or team…" style={{flex:1,padding:"6px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}} />
-                <button onClick={()=>{onUpdate(item.id,{owner:ownerText});setEditOwner(false);}} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:6,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Save</button>
-                <button onClick={()=>setEditOwner(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Cancel</button>
-              </div>
-            ):(
-              <div onClick={()=>setEditOwner(true)} style={{padding:"6px 10px",border:"1px dashed #cbd5e1",borderRadius:6,fontSize:13,color:item.owner?"#1e293b":"#94a3b8",cursor:"pointer",background:"#fff"}}>{item.owner||"Click to assign owner…"}</div>
-            )}
-          </div>
-          <div>
-            <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:6}}>Notes</div>
-            {editNotes?(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <textarea value={notesText} onChange={e=>setNotesText(e.target.value)} rows={3} placeholder="Add implementation notes…" style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}} />
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>{onUpdate(item.id,{notes:notesText});setEditNotes(false);}} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:6,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Save</button>
-                  <button onClick={()=>setEditNotes(false)} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Cancel</button>
+              <div style={{width:80,flexShrink:0,textAlign:"right"}}>
+                <div style={{background:risk.bg,color:risk.text,border:`1px solid ${risk.border}`,padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:800,display:"inline-block",whiteSpace:"nowrap"}}>
+                  {risk.level==="done" ? "✓ Done" :
+                   risk.level==="overdue" ? `${Math.abs(risk.days||0)}d ago` :
+                   risk.days != null ? `${risk.days}d` : "—"}
+                </div>
+                <div style={{fontSize:9,color:"#94a3b8",marginTop:3}}>
+                  {item.deadline ? new Date(item.deadline).toLocaleDateString("sv-SE",{day:"numeric",month:"short"}) : ""}
                 </div>
               </div>
-            ):(
-              <div onClick={()=>setEditNotes(true)} style={{padding:"6px 10px",border:"1px dashed #cbd5e1",borderRadius:6,fontSize:13,color:item.notes?"#1e293b":"#94a3b8",cursor:"pointer",background:"#fff"}}>{item.notes||"Click to add notes…"}</div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PayRegCard({item}) {
-  const [open,setOpen]=useState(false);
-  const imp=IMP[item.impact]||IMP.low;
-  return (
-    <div style={{background:"#fff",border:`1px solid ${imp.border}`,borderLeft:`4px solid ${imp.dot}`,borderRadius:10,marginBottom:10,overflow:"hidden"}}>
-      <div style={{padding:"14px 18px",cursor:"pointer"}} onClick={()=>setOpen(!open)}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:imp.dot,marginTop:6,flexShrink:0}} />
-          <div style={{flex:1}}>
-            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:6,alignItems:"center"}}>
-              <span style={{background:"#0f172a",color:"#fff",padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:700}}>{item.source}</span>
-              {item.message_types.map(m=><Chip key={m} label={m} c={MSG_C[m]} />)}
-              {item.systems.map(s=><Chip key={s} label={s} c={SYS_C[s]} />)}
-              <span style={{marginLeft:"auto",fontSize:11,color:"#94a3b8"}}>{fmtDate(item.date)}</span>
             </div>
-            <div style={{fontSize:14,fontWeight:700,color:"#0f172a",marginBottom:4}}>{item.title}</div>
-            <p style={{margin:0,fontSize:13,color:"#475569",lineHeight:1.6}}>{item.summary}</p>
-          </div>
-          <div style={{color:"#cbd5e1",fontSize:13}}>{open?"▲":"▼"}</div>
-        </div>
+          );
+        })}
       </div>
-      {open&&(
-        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafbfc",padding:"14px 18px 16px 36px"}}>
-          <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Required Actions</div>
-          {item.actions.map((a,i)=>(
-            <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:6}}>
-              <div style={{width:20,height:20,borderRadius:"50%",background:imp.bg,color:imp.text,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
-              <span style={{fontSize:13,color:"#1e293b",lineHeight:1.6}}>{a}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap",fontSize:11,color:"#64748b"}}>
+        <span style={{fontWeight:700,color:"#475569"}}>Legend:</span>
+        {[
+          {color:"#3b82f6",label:"Today"},
+          {color:"#ef4444",label:"Critical / Overdue (≤30d)"},
+          {color:"#f59e0b",label:"At Risk (31-60d)"},
+          {color:"#fb923c",label:"Watch (61-90d)"},
+          {color:"#22c55e",label:"On Track (>90d)"},
+        ].map(l=>(
+          <div key={l.label} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:l.color}} />
+            <span>{l.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -522,6 +273,7 @@ export default function App() {
   const [fDept,setFDept]=useState("all");
   const [search,setSearch]=useState("");
   const [lastRefresh,setLastRefresh]=useState(null);
+  const [regView,setRegView]=useState("list");
 
   const load=async()=>{setLoading(true);setError(null);try{setItems(await fetchRegulations());setLastRefresh(new Date());}catch(e){setError(e.message);}setLoading(false);};
 const loadTickets = async () => {
@@ -583,9 +335,9 @@ const loadTickets = async () => {
   const TABS=[{id:"regulations",label:"📋 Regulations",badge:stats.unreviewed>0?stats.unreviewed:null},{id:"it_tickets",label:"⚙️ IT Tickets",badge:stats.itOpen>0?stats.itOpen:null},{id:"payments",label:"💳 Payments & ISO 20022",badge:null}];
 
   return (
-    <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+    <main style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
       <style>{`* { box-sizing: border-box; } body { margin: 0; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",color:"#fff",padding:"0 32px"}}>
+      <header style={{background:"linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",color:"#fff",padding:"0 32px"}}>
         <div style={{maxWidth:1000,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"24px 0 16px",flexWrap:"wrap",gap:20}}>
             <div>
@@ -595,45 +347,56 @@ const loadTickets = async () => {
             </div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               {[{label:"Total",value:stats.total,color:"#60a5fa"},{label:"To Review",value:stats.unreviewed,color:"#fbbf24"},{label:"IT Open",value:stats.itOpen,color:"#c084fc"},{label:"High Impact",value:stats.high,color:"#f87171"}].map(s=>(
-                <div key={s.label} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderTop:`2px solid ${s.color}`,borderRadius:8,padding:"10px 16px",textAlign:"center",minWidth:72}}>
-                  <div style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
-                  <div style={{fontSize:10,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em"}}>{s.label}</div>
-                </div>
-              ))}
+  <div key={s.label} style={{background:"rgba(255,255,255,0.12)",border:`1px solid ${s.color}40`,borderTop:`3px solid ${s.color}`,borderRadius:8,padding:"10px 18px",textAlign:"center",minWidth:80}}>
+    <div style={{fontSize:22,fontWeight:900,color:"#ffffff",letterSpacing:"-0.02em"}}>{s.value}</div>
+    <div style={{fontSize:10,color:"#cbd5e1",textTransform:"uppercase",letterSpacing:"0.1em",marginTop:2,fontWeight:600}}>{s.label}</div>
+  </div>
+))}
               <button onClick={()=>{load();loadTickets();}} disabled={loading} style={{background:"rgba(255,255,255,0.1)",color:"#fff",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>{loading?"⏳":"↻"}</button>
             </div>
           </div>
-          <div style={{display:"flex",gap:4}}>
+          <nav style={{display:"flex",gap:4}} aria-label="Main navigation">
             {TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"#fff":"transparent",color:tab===t.id?"#0f172a":"#94a3b8",border:"none",borderRadius:"8px 8px 0 0",padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8,transition:"all 0.15s"}}>
+              <button key={t.id} onClick={()=>setTab(t.id)} role="tab" aria-selected={tab===t.id} aria-label={`${t.label} tab`} style={{background:tab===t.id?"#fff":"transparent",color:tab===t.id?"#0f172a":"#94a3b8",border:"none",borderRadius:"8px 8px 0 0",padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8,transition:"all 0.15s"}}>
                 {t.label}
-                {t.badge&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:800}}>{t.badge}</span>}
+                {t.badge&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:800}} aria-label={`${t.badge} items pending`}>{t.badge}</span>}
               </button>
             ))}
-          </div>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div style={{maxWidth:1000,margin:"0 auto",padding:"24px 32px"}}>
+      <section style={{maxWidth:1000,margin:"0 auto",padding:"24px 32px"}}>
         {tab==="regulations"&&(
-          <>
-            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-              <input type="text" placeholder="Search regulations…" value={search} onChange={e=>setSearch(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:13,outline:"none",flex:1,minWidth:160,fontFamily:"inherit"}} />
-              <div style={{display:"flex",gap:4}}>
-                {[["all","All Impact"],["high","🔴 High"],["medium","🟡 Medium"],["low","🟢 Low"]].map(([v,l])=>(
-                  <button key={v} onClick={()=>setFImpact(v)} style={{background:fImpact===v?"#0f172a":"#f1f5f9",color:fImpact===v?"#fff":"#64748b",border:"none",borderRadius:6,padding:"6px 11px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
-                ))}
+          <article>
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+              <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:8,padding:3,flexShrink:0}}>
+                <button onClick={()=>setRegView("list")} style={{background:regView==="list"?"#fff":"transparent",color:regView==="list"?"#0f172a":"#64748b",border:"none",borderRadius:6,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:regView==="list"?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>
+                  ☰ List
+                </button>
+                <button onClick={()=>setRegView("calendar")} style={{background:regView==="calendar"?"#fff":"transparent",color:regView==="calendar"?"#0f172a":"#64748b",border:"none",borderRadius:6,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:regView==="calendar"?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>
+                  📅 Deadline Calendar
+                </button>
               </div>
-              <div style={{display:"flex",gap:4}}>
-                {[["all","All"],["unreviewed","Unreviewed"],["in_progress","In Progress"],["approved","Approved"],["approved_it","IT Created"]].map(([v,l])=>(
-                  <button key={v} onClick={()=>setFStatus(v)} style={{background:fStatus===v?"#0f172a":"#f1f5f9",color:fStatus===v?"#fff":"#64748b",border:"none",borderRadius:6,padding:"6px 11px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
-                ))}
-              </div>
-              {allDepts.length>0&&<select value={fDept} onChange={e=>setFDept(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 10px",fontSize:12,background:"#f1f5f9",outline:"none",cursor:"pointer",fontFamily:"inherit"}}><option value="all">All Departments</option>{allDepts.map(d=><option key={d} value={d}>{d}</option>)}</select>}
+              {regView==="list"&&<>
+                <input type="text" placeholder="🔍  Search regulations…" value={search} onChange={e=>setSearch(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 14px",fontSize:13,outline:"none",flex:1,minWidth:160,fontFamily:"inherit",background:"#f8fafc",color:"#0f172a"}} />
+                <div style={{display:"flex",gap:4}}>
+                  {[["all","All Impact"],["high","🔴 High"],["medium","🟡 Medium"],["low","🟢 Low"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setFImpact(v)} style={{background:fImpact===v?"#0f172a":"#f1f5f9",color:fImpact===v?"#fff":"#64748b",border:"none",borderRadius:6,padding:"6px 11px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  {[["all","All"],["unreviewed","Unreviewed"],["in_progress","In Progress"],["approved","Approved"],["approved_it","IT Created"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setFStatus(v)} style={{background:fStatus===v?"#0f172a":"#f1f5f9",color:fStatus===v?"#fff":"#64748b",border:"none",borderRadius:6,padding:"6px 11px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
+                  ))}
+                </div>
+                {allDepts.length>0&&<select value={fDept} onChange={e=>setFDept(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 10px",fontSize:12,background:"#f8fafc",color:"#475569",outline:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}><option value="all">All Departments</option>{allDepts.map(d=><option key={d} value={d}>{d}</option>)}</select>}
+              </>}
             </div>
             {loading&&<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8",fontSize:14}}>⏳ Loading from Supabase…</div>}
             {error&&<div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:10,padding:"16px 20px",color:"#991b1b",fontSize:13,marginBottom:20}}><strong>Could not load:</strong> {error}<button onClick={load} style={{marginLeft:12,background:"#991b1b",color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer"}}>Retry</button></div>}
-            {!loading&&!error&&(
+            {!loading&&!error&&regView==="calendar"&&<DeadlineCalendar items={items} />}
+            {!loading&&!error&&regView==="list"&&(
               <>
                 <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>Showing <strong style={{color:"#475569"}}>{filtered.length}</strong> of {items.length} · {stats.unreviewed} awaiting review</div>
                 {filtered.length===0
@@ -642,11 +405,11 @@ const loadTickets = async () => {
                 }
               </>
             )}
-          </>
+          </article>
         )}
         {tab==="it_tickets"&&<ITTicketsTab tickets={tickets} regulations={items} onStatusChange={handleTicketStatus} loading={ticketsLoading} />}
         {tab==="payments"&&<PaymentsTab />}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
