@@ -66,32 +66,32 @@ function RegCard({ item, onNote, onFieldUpdate, onApprove, onApproveIT }) {
             <div style={{display:"flex",gap:16,marginBottom:12}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Responsible</div>
-                <select value={item.regulatory_responsible||""} onChange={e=>onFieldUpdate(item.id,{regulatory_responsible:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.regulatory_responsible?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
-                  <option value="">— select —</option>
-                  {REGULATORY_RESPONSIBLE.map(v=><option key={v} value={v}>{v}</option>)}
+                <select value={item.regulatory_responsible||""} onChange={e=>onFieldUpdate(item.id,{regulatory_responsible:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
+                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
+                  {REGULATORY_RESPONSIBLE.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
                 </select>
               </div>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Watcher</div>
-                <select value={item.regulatory_watcher||""} onChange={e=>onFieldUpdate(item.id,{regulatory_watcher:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.regulatory_watcher?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
-                  <option value="">— select —</option>
-                  {REGULATORY_WATCHER.map(v=><option key={v} value={v}>{v}</option>)}
+                <select value={item.regulatory_watcher||""} onChange={e=>onFieldUpdate(item.id,{regulatory_watcher:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
+                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
+                  {REGULATORY_WATCHER.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
                 </select>
               </div>
             </div>
             <div style={{display:"flex",gap:16}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Assessed Impact – Effort</div>
-                <select value={item.effort_level||""} onChange={e=>onFieldUpdate(item.id,{effort_level:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.effort_level?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
-                  <option value="">— select —</option>
-                  {EFFORT_LEVELS.map(v=><option key={v} value={v}>{v}</option>)}
+                <select value={item.effort_level||""} onChange={e=>onFieldUpdate(item.id,{effort_level:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
+                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
+                  {EFFORT_LEVELS.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
                 </select>
               </div>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Assessed Impact – When in Place</div>
-                <select value={item.impact_when_in_place||""} onChange={e=>onFieldUpdate(item.id,{impact_when_in_place:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.impact_when_in_place?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
-                  <option value="">— select —</option>
-                  {EFFORT_LEVELS.map(v=><option key={v} value={v}>{v}</option>)}
+                <select value={item.impact_when_in_place||""} onChange={e=>onFieldUpdate(item.id,{impact_when_in_place:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
+                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
+                  {EFFORT_LEVELS.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
                 </select>
               </div>
             </div>
