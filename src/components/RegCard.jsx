@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import PropTypes from "prop-types";
 import Chip from "./Chip";
-import { IMP, DEPT_C } from "../constants";
+import { IMP, DEPT_C, REGULATORY_RESPONSIBLE, REGULATORY_WATCHER, EFFORT_LEVELS } from "../constants";
 import { fmtDate } from "../utils/format";
 
-function RegCard({ item, onNote, onApprove, onApproveIT }) {
+function RegCard({ item, onNote, onFieldUpdate, onApprove, onApproveIT }) {
   const [open, setOpen] = useState(false);
   const [editNote, setEditNote] = useState(false);
   const [noteText, setNoteText] = useState(item?.reviewer_note || "");
@@ -61,6 +61,41 @@ function RegCard({ item, onNote, onApprove, onApproveIT }) {
               ))}
             </div>
           )}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Ownership & Assessment</div>
+            <div style={{display:"flex",gap:16,marginBottom:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Responsible</div>
+                <select value={item.regulatory_responsible||""} onChange={e=>onFieldUpdate(item.id,{regulatory_responsible:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.regulatory_responsible?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
+                  <option value="">— select —</option>
+                  {REGULATORY_RESPONSIBLE.map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Watcher</div>
+                <select value={item.regulatory_watcher||""} onChange={e=>onFieldUpdate(item.id,{regulatory_watcher:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.regulatory_watcher?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
+                  <option value="">— select —</option>
+                  {REGULATORY_WATCHER.map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:16}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Assessed Impact – Effort</div>
+                <select value={item.effort_level||""} onChange={e=>onFieldUpdate(item.id,{effort_level:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.effort_level?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
+                  <option value="">— select —</option>
+                  {EFFORT_LEVELS.map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Assessed Impact – When in Place</div>
+                <select value={item.impact_when_in_place||""} onChange={e=>onFieldUpdate(item.id,{impact_when_in_place:e.target.value})} style={{width:"100%",padding:"7px 10px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",background:item.impact_when_in_place?"#f0f9ff":"#fff",cursor:"pointer",boxSizing:"border-box"}}>
+                  <option value="">— select —</option>
+                  {EFFORT_LEVELS.map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
           <div style={{marginBottom:20}}>
             <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Reviewer Note</div>
             {editNote?(
@@ -120,8 +155,13 @@ RegCard.propTypes = {
     source: PropTypes.string,
     category: PropTypes.string,
     relevance_reason: PropTypes.string,
+    regulatory_responsible: PropTypes.string,
+    regulatory_watcher: PropTypes.string,
+    effort_level: PropTypes.string,
+    impact_when_in_place: PropTypes.string,
   }).isRequired,
   onNote: PropTypes.func.isRequired,
+  onFieldUpdate: PropTypes.func.isRequired,
   onApprove: PropTypes.func.isRequired,
   onApproveIT: PropTypes.func.isRequired,
 };

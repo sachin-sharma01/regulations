@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import * as XLSX from 'xlsx';
 import { fetchRegulations, fetchTickets, updateReg, insertTicket, updateTicket, generateITAnalysis } from "./utils/api";
 import { fmtDate, daysUntil } from "./utils/format";
-import { DEPT_C, IMP, REV_S, TKT_S, ISO_S, SYS_C, MSG_C, MILESTONES, INIT_ISO, PAY_REGS } from "./constants";
+import { DEPT_C, IMP, REV_S, TKT_S, ISO_S, SYS_C, MSG_C, MILESTONES, INIT_ISO, PAY_REGS, REGULATORY_RESPONSIBLE, CATEGORY_OWNER_MAP, REGULATORY_CATEGORY } from "./constants";
 import Chip from "./components/Chip";
 import CopyButton from "./components/CopyButton";
 import CodeBlock from "./components/CodeBlock";
@@ -274,6 +275,8 @@ export default function App() {
   const [search,setSearch]=useState("");
   const [lastRefresh,setLastRefresh]=useState(null);
   const [regView,setRegView]=useState("list");
+  const [fResponsible,setFResponsible]=useState("all");
+  const [showRules,setShowRules]=useState(false);
 
   const load=async()=>{setLoading(true);setError(null);try{setItems(await fetchRegulations());setLastRefresh(new Date());}catch(e){setError(e.message);}setLoading(false);};
 const loadTickets = async () => {
@@ -298,6 +301,10 @@ const loadTickets = async () => {
 
   const cycleStatus=async(id,cur)=>{const next=REV_S[cur]?.next||"unreviewed";setItems(prev=>prev.map(i=>i.id===id?{...i,review_status:next}:i));await updateReg(id,{review_status:next});};
   const updateNote=async(id,note)=>{setItems(prev=>prev.map(i=>i.id===id?{...i,reviewer_note:note}:i));await updateReg(id,{reviewer_note:note});};
+  const handleFieldUpdate = async (id, fields) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...fields } : i));
+    await updateReg(id, fields);
+  };
   const handleApprove=async(id)=>{setItems(prev=>prev.map(i=>i.id===id?{...i,review_status:"approved"}:i));await updateReg(id,{review_status:"approved"});};
 
   const handleApproveIT=async(regulation)=>{
@@ -323,11 +330,46 @@ const loadTickets = async () => {
 
   const handleTicketStatus=async(id,next)=>{setTickets(prev=>prev.map(t=>t.id===id?{...t,status:next}:t));await updateTicket(id,{status:next});};
 
+  const exportToExcel = () => {
+    const rows = items.map(item => ({
+      "Regulation Name":              item.title || "",
+      "Regulatory category":          item.category || "",
+      "Into force Date":              item.deadline || "",
+      "Status":                       item.review_status === "approved" || item.review_status === "approved_it"
+                                        ? "Approved" : item.review_status === "in_progress"
+                                        ? "In Progress" : "Monitoring",
+      "Regulatory responsible":       item.regulatory_responsible || "",
+      "Regulatory watcher":           item.regulatory_watcher || "",
+      "Assessed impact - Effort":     item.effort_level || "",
+      "Assessed impact - When in place": item.impact_when_in_place || "",
+      "Comment":                      item.reviewer_note || "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    ws['!cols'] = [
+      { wch: 60 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 35 },
+      { wch: 30 },
+      { wch: 22 },
+      { wch: 25 },
+      { wch: 50 },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Regulations");
+    XLSX.writeFile(wb, `bluestep_regulations_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   const allDepts=[...new Set(items.flatMap(i=>i.affected_departments||[]))].sort();
   const filtered=items.filter(item=>{
     if(fImpact!=="all"&&item.impact_level!==fImpact)return false;
     if(fStatus!=="all"&&item.review_status!==fStatus)return false;
     if(fDept!=="all"&&!item.affected_departments?.includes(fDept))return false;
+    if(fResponsible!=="all"&&item.regulatory_responsible!==fResponsible)return false;
     if(search){const q=search.toLowerCase();return item.title?.toLowerCase().includes(q)||item.summary_sv?.toLowerCase().includes(q)||item.source?.toLowerCase().includes(q);}
     return true;
   });
@@ -353,6 +395,7 @@ const loadTickets = async () => {
   </div>
 ))}
               <button onClick={()=>{load();loadTickets();}} disabled={loading} style={{background:"rgba(255,255,255,0.1)",color:"#fff",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"10px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>{loading?"⏳":"↻"}</button>
+              <button onClick={exportToExcel} style={{background:"#15803d",color:"#fff",border:"none",borderRadius:8,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>↓ Export Excel</button>
             </div>
           </div>
           <nav style={{display:"flex",gap:4}} aria-label="Main navigation">
@@ -378,6 +421,7 @@ const loadTickets = async () => {
                   📅 Deadline Calendar
                 </button>
               </div>
+              <button onClick={()=>setShowRules(true)} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",color:"#475569"}}>⚙️ Assignment Rules</button>
               {regView==="list"&&<>
                 <input type="text" placeholder="🔍  Search regulations…" value={search} onChange={e=>setSearch(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 14px",fontSize:13,outline:"none",flex:1,minWidth:160,fontFamily:"inherit",background:"#f8fafc",color:"#0f172a"}} />
                 <div style={{display:"flex",gap:4}}>
@@ -391,6 +435,7 @@ const loadTickets = async () => {
                   ))}
                 </div>
                 {allDepts.length>0&&<select value={fDept} onChange={e=>setFDept(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 10px",fontSize:12,background:"#f8fafc",color:"#475569",outline:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}><option value="all">All Departments</option>{allDepts.map(d=><option key={d} value={d}>{d}</option>)}</select>}
+                <select value={fResponsible} onChange={e=>setFResponsible(e.target.value)} style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 10px",fontSize:12,background:"#f8fafc",color:"#475569",outline:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}><option value="all">All Responsible</option>{REGULATORY_RESPONSIBLE.map(r=><option key={r} value={r}>{r}</option>)}</select>
               </>}
             </div>
             {loading&&<div style={{textAlign:"center",padding:"60px 0",color:"#94a3b8",fontSize:14}}>⏳ Loading from Supabase…</div>}
@@ -401,7 +446,7 @@ const loadTickets = async () => {
                 <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>Showing <strong style={{color:"#475569"}}>{filtered.length}</strong> of {items.length} · {stats.unreviewed} awaiting review</div>
                 {filtered.length===0
                   ?<div style={{textAlign:"center",color:"#94a3b8",padding:"60px 0",fontSize:14}}>{items.length===0?"No data yet — run the n8n workflow to populate.":"No regulations match your filters."}</div>
-                  :filtered.map(item=><RegCard key={item.id} item={item} onStatus={cycleStatus} onNote={updateNote} onApprove={handleApprove} onApproveIT={handleApproveIT} />)
+                  :filtered.map(item=><RegCard key={item.id} item={item} onStatus={cycleStatus} onNote={updateNote} onFieldUpdate={handleFieldUpdate} onApprove={handleApprove} onApproveIT={handleApproveIT} />)
                 }
               </>
             )}
@@ -410,6 +455,42 @@ const loadTickets = async () => {
         {tab==="it_tickets"&&<ITTicketsTab tickets={tickets} regulations={items} onStatusChange={handleTicketStatus} loading={ticketsLoading} />}
         {tab==="payments"&&<PaymentsTab />}
       </section>
+
+      {showRules&&(
+        <div onClick={()=>setShowRules(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:12,padding:24,maxWidth:680,width:"100%",maxHeight:"90vh",overflowY:"auto",margin:"0 16px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <h2 style={{margin:0,fontSize:18,fontWeight:800,color:"#0f172a"}}>AI Assignment Rules</h2>
+              <button onClick={()=>setShowRules(false)} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#94a3b8",padding:4}}>✕</button>
+            </div>
+            <p style={{margin:"0 0 16px",fontSize:13,color:"#64748b",lineHeight:1.6}}>Claude uses these rules to auto-assign ownership when a new regulation is processed. Assignments can be overridden on each regulation card.</p>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#0f172a"}}>
+                  <th style={{padding:"10px 14px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em"}}>Category</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em"}}>Regulatory Responsible</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em"}}>Regulatory Watcher</th>
+                </tr>
+              </thead>
+              <tbody>
+                {REGULATORY_CATEGORY.map((cat,i)=>{
+                  const mapping=CATEGORY_OWNER_MAP[cat];
+                  return mapping?(
+                    <tr key={cat} style={{background:i%2===0?"#fff":"#f8fafc"}}>
+                      <td style={{padding:"8px 14px",fontWeight:600,color:"#1e293b"}}>{cat}</td>
+                      <td style={{padding:"8px 14px",color:"#475569"}}>{mapping.responsible}</td>
+                      <td style={{padding:"8px 14px",color:"#475569"}}>{mapping.watcher}</td>
+                    </tr>
+                  ):null;
+                })}
+              </tbody>
+            </table>
+            <div style={{marginTop:16,textAlign:"right"}}>
+              <button onClick={()=>setShowRules(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"8px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
