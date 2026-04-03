@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import PropTypes from "prop-types";
 import Chip from "./Chip";
-import { IMP, DEPT_C, REGULATORY_RESPONSIBLE, REGULATORY_WATCHER, EFFORT_LEVELS } from "../constants";
+import { IMP, DEPT_C, EFFORT_LEVELS } from "../constants";
 import { fmtDate } from "../utils/format";
 
 function RegCard({ item, onNote, onFieldUpdate, onApprove, onApproveIT }) {
@@ -63,22 +63,6 @@ function RegCard({ item, onNote, onFieldUpdate, onApprove, onApproveIT }) {
           )}
           <div style={{marginBottom:16}}>
             <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:8}}>Ownership & Assessment</div>
-            <div style={{display:"flex",gap:16,marginBottom:12}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Responsible</div>
-                <select value={item.regulatory_responsible||""} onChange={e=>onFieldUpdate(item.id,{regulatory_responsible:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
-                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
-                  {REGULATORY_RESPONSIBLE.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
-                </select>
-              </div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Regulatory Watcher</div>
-                <select value={item.regulatory_watcher||""} onChange={e=>onFieldUpdate(item.id,{regulatory_watcher:e.target.value})} style={{width:"100%",padding:"8px 10px",border:"1px solid #cbd5e1",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",cursor:"pointer",background:"#ffffff",color:"#1e293b",appearance:"auto",WebkitAppearance:"auto"}}>
-                  <option value="" style={{color:"#94a3b8",background:"#ffffff"}}>— select —</option>
-                  {REGULATORY_WATCHER.map(v=><option key={v} value={v} style={{color:"#1e293b",background:"#ffffff"}}>{v}</option>)}
-                </select>
-              </div>
-            </div>
             <div style={{display:"flex",gap:16}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:"0.12em",color:"#94a3b8",marginBottom:4}}>Assessed Impact – Effort</div>
@@ -155,8 +139,6 @@ RegCard.propTypes = {
     source: PropTypes.string,
     category: PropTypes.string,
     relevance_reason: PropTypes.string,
-    regulatory_responsible: PropTypes.string,
-    regulatory_watcher: PropTypes.string,
     effort_level: PropTypes.string,
     impact_when_in_place: PropTypes.string,
   }).isRequired,
