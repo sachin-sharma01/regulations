@@ -26,11 +26,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
     const response = await fetch(WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: question.slice(0, 2000) }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -40,6 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await response.json();
     return res.status(200).json(data);
   } catch (e: any) {
-    return res.status(502).json({ error: "Failed to reach n8n webhook" });
+    console.error("Webhook fetch error:", e.message, e.cause);
+    return res.status(502).json({
+      error: "Failed to reach n8n webhook",
+      detail: e.message,
+    });
   }
 }
