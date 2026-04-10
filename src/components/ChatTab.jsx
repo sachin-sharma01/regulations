@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
-const WEBHOOK_URL = "https://sharmajiastro.duckdns.org/webhook/regulation-search";
+const WEBHOOK_URL = "/api/regulation-search";
 
 const IMPACT_COLORS = {
   high:   { bg: "#fef2f2", text: "#991b1b", border: "#fca5a5" },
