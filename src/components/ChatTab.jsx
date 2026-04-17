@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 const WEBHOOK_URL = "/api/regulation-search";
 
@@ -8,31 +8,54 @@ const IMPACT_COLORS = {
   low:    { bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
 };
 
-function SourceCard({ source }) {
+function getSimilarityColor(similarity) {
+  const val = parseFloat(similarity);
+  if (val > 70) return "#22c55e";
+  if (val >= 40) return "#f59e0b";
+  return "#ef4444";
+}
+
+function getLatencyColor(seconds) {
+  if (seconds < 2) return "#22c55e";
+  if (seconds <= 5) return "#f59e0b";
+  return "#ef4444";
+}
+
+function SourceCard({ source, highlighted, messageId }) {
   const level = (source.impact_level || "").toLowerCase();
   const colors = IMPACT_COLORS[level] || { bg: "#f8fafc", text: "#475569", border: "#e2e8f0" };
+  const simColor = source.similarity ? getSimilarityColor(source.similarity) : "#64748b";
+
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
-      padding: "8px 12px", fontSize: 12,
-    }}>
+    <div
+      id={`source-${messageId}-${source.number}`}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: highlighted ? "#eff6ff" : "#fff",
+        border: highlighted ? "1px solid #3b82f6" : "1px solid #e2e8f0",
+        borderRadius: 8, padding: "8px 12px", fontSize: 12,
+        transition: "all 0.3s ease",
+      }}
+    >
       <span style={{ color: "#1e293b", fontWeight: 600, flex: 1, marginRight: 8 }}>
+        <span style={{ color: "#3b82f6", fontWeight: 700, marginRight: 4 }}>
+          [{source.number}]
+        </span>
         {source.title}
       </span>
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+        {source.similarity && (
+          <span style={{ color: simColor, fontSize: 11, fontWeight: 700 }}>
+            {source.similarity}
+          </span>
+        )}
         {source.impact_level && (
           <span style={{
             background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
             borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 700,
             textTransform: "uppercase", letterSpacing: "0.06em",
           }}>
-            {source.impact_level}
-          </span>
-        )}
-        {source.similarity && (
-          <span style={{ color: "#64748b", fontSize: 11, fontWeight: 600 }}>
-            {source.similarity}
+            {source.impact_level} Impact
           </span>
         )}
       </div>
@@ -40,8 +63,60 @@ function SourceCard({ source }) {
   );
 }
 
-function ChatMessage({ msg }) {
+function CitationText({ text, onCitationClick }) {
+  const parts = text.split(/(\[\d+\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return (
+            <span
+              key={i}
+              onClick={() => onCitationClick(num)}
+              style={{
+                color: "#3b82f6", fontWeight: 700, cursor: "pointer",
+                background: "#eff6ff", borderRadius: 3, padding: "0 3px",
+                fontSize: "0.9em", transition: "background 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#dbeafe"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#eff6ff"; }}
+              title={`Jump to source ${num}`}
+            >
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function ChatMessage({ msg, messageId }) {
   const isUser = msg.role === "user";
+  const [highlightedSource, setHighlightedSource] = useState(null);
+  const highlightTimeoutRef = useRef(null);
+
+  const handleCitationClick = useCallback((num) => {
+    const el = document.getElementById(`source-${messageId}-${num}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedSource(num);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = setTimeout(() => setHighlightedSource(null), 2000);
+    }
+  }, [messageId]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    };
+  }, []);
+
+  const isRefused = msg.refused;
+
   return (
     <div style={{
       display: "flex", flexDirection: "column",
@@ -52,18 +127,20 @@ function ChatMessage({ msg }) {
         {!isUser && (
           <div style={{
             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-            background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+            background: isRefused
+              ? "linear-gradient(135deg, #92400e 0%, #f59e0b 100%)"
+              : "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14, marginTop: 2,
           }}>
-            🤖
+            {isRefused ? "⚠️" : "🤖"}
           </div>
         )}
         <div style={{ flex: 1 }}>
           <div style={{
-            background: isUser ? "#0f172a" : "#fff",
-            color: isUser ? "#fff" : "#1e293b",
-            border: isUser ? "none" : "1px solid #e2e8f0",
+            background: isUser ? "#0f172a" : isRefused ? "#fffbeb" : "#fff",
+            color: isUser ? "#fff" : isRefused ? "#92400e" : "#1e293b",
+            border: isUser ? "none" : isRefused ? "1px solid #fcd34d" : "1px solid #e2e8f0",
             borderRadius: isUser ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
             padding: "12px 16px",
             fontSize: 14,
@@ -71,10 +148,23 @@ function ChatMessage({ msg }) {
             boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             whiteSpace: "pre-wrap",
           }}>
-            {msg.text}
+            {isUser || isRefused
+              ? msg.text
+              : <CitationText text={msg.text} onCitationClick={handleCitationClick} />}
           </div>
 
-          {msg.sources && msg.sources.length > 0 && (
+          {!isUser && msg.latency != null && (
+            <div style={{
+              marginTop: 6, fontSize: 11, fontWeight: 600,
+              color: getLatencyColor(msg.latency),
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              <span>⏱</span>
+              <span>Response time: {msg.latency.toFixed(1)}s</span>
+            </div>
+          )}
+
+          {!isRefused && msg.sources && msg.sources.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div style={{
                 fontSize: 10, fontWeight: 800, textTransform: "uppercase",
@@ -83,7 +173,14 @@ function ChatMessage({ msg }) {
                 Source Regulations
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {msg.sources.map((src, i) => <SourceCard key={i} source={src} />)}
+                {msg.sources.map((src, i) => (
+                  <SourceCard
+                    key={i}
+                    source={src}
+                    highlighted={highlightedSource === src.number}
+                    messageId={messageId}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -164,6 +261,7 @@ export default function ChatTab() {
     setMessages(prev => [...prev, { role: "user", text }]);
     setLoading(true);
 
+    const startTime = Date.now();
     try {
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
@@ -177,10 +275,13 @@ export default function ChatTab() {
       }
 
       const data = await res.json();
+      const latency = (Date.now() - startTime) / 1000;
       setMessages(prev => [...prev, {
         role: "assistant",
         text: data.answer || "No answer returned.",
         sources: data.sources || [],
+        refused: !!data.refused,
+        latency,
       }]);
     } catch (e) {
       setError(e.message);
@@ -243,7 +344,7 @@ export default function ChatTab() {
         flex: 1, overflowY: "auto", padding: "8px 4px",
         display: "flex", flexDirection: "column",
       }}>
-        {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
+        {messages.map((msg, i) => <ChatMessage key={i} msg={msg} messageId={i} />)}
         {loading && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
