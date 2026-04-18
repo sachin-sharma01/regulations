@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const WEBHOOK_URL = "/api/regulation-search";
+const WEBHOOK_URL = "/api/match_regulations";
 
 const IMPACT_COLORS = {
   high:   { bg: "#fef2f2", text: "#991b1b", border: "#fca5a5" },

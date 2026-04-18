@@ -5,7 +5,7 @@ const ALLOWED_ORIGIN =
 
 const WEBHOOK_URL =
   process.env.N8N_WEBHOOK_URL ||
-  "https://sharmajiastro.duckdns.org/webhook/regulation-search";
+  "https://sharmajiastro.duckdns.org/webhook/match_regulations";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
